@@ -2,13 +2,12 @@ use crate::context::WMIContext;
 use crate::utils::WMIResult;
 use log::debug;
 use std::marker::PhantomData;
-use windows::Win32::Foundation::{CO_E_NOTINITIALIZED, RPC_E_TOO_LATE};
+use windows::Win32::Foundation::CO_E_NOTINITIALIZED;
 use windows::Win32::System::Com::{
-    CLSCTX_INPROC_SERVER, CoCreateInstance, CoIncrementMTAUsage, CoInitializeSecurity,
-    CoSetProxyBlanket, EOAC_NONE, RPC_C_AUTHN_LEVEL, RPC_C_AUTHN_LEVEL_CALL,
-    RPC_C_AUTHN_LEVEL_CONNECT, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_AUTHN_LEVEL_NONE,
-    RPC_C_AUTHN_LEVEL_PKT, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
-    RPC_C_IMP_LEVEL_IMPERSONATE,
+    CLSCTX_INPROC_SERVER, CoCreateInstance, CoSetProxyBlanket, EOAC_NONE, RPC_C_AUTHN_LEVEL,
+    RPC_C_AUTHN_LEVEL_CALL, RPC_C_AUTHN_LEVEL_CONNECT, RPC_C_AUTHN_LEVEL_DEFAULT,
+    RPC_C_AUTHN_LEVEL_NONE, RPC_C_AUTHN_LEVEL_PKT, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY,
+    RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_IMP_LEVEL_IMPERSONATE,
 };
 use windows::Win32::System::Rpc::{RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE};
 use windows::Win32::System::Wmi::{
@@ -53,7 +52,9 @@ impl From<AuthLevel> for RPC_C_AUTHN_LEVEL {
     }
 }
 
+#[cfg(not(target_vendor = "win7"))]
 fn init_security() -> windows_core::Result<()> {
+    use windows::Win32::System::Com::CoInitializeSecurity;
     unsafe {
         CoInitializeSecurity(
             None,
@@ -251,7 +252,19 @@ fn create_locator() -> windows_core::Result<IWbemLocator> {
     Ok(loc)
 }
 
+#[cfg(target_vendor = "win7")]
 fn create_locator_or_init() -> windows_core::Result<IWbemLocator> {
+    // `CoIncrementMTAUsage` is not available on Windows 7,
+    // so it is the responsibly of the caller to initialize COM and the security layer,
+    // using `CoInitializeEx` and `CoInitializeSecurity`, respectively.
+    create_locator()
+}
+
+#[cfg(not(target_vendor = "win7"))]
+fn create_locator_or_init() -> windows_core::Result<IWbemLocator> {
+    use windows::Win32::Foundation::RPC_E_TOO_LATE;
+    use windows::Win32::System::Com::CoIncrementMTAUsage;
+
     let loc_res = create_locator();
     match loc_res {
         // If COM is not initialized, initialize it and try again.
