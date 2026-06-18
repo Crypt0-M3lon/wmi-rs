@@ -29,7 +29,7 @@ impl WMIConnection {
                 &query_language,
                 &query,
                 WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-                None,
+                &self.ctx.0,
             )?
         };
 
@@ -168,7 +168,7 @@ impl WMIConnection {
                 &query_language,
                 &query,
                 Default::default(),
-                None,
+                &self.ctx.0,
                 &p_sink_handle,
             )?
         };
